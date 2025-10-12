@@ -1,35 +1,53 @@
-import fetch from "node-fetch";
+export const config = {
+  api: {
+    bodyParser: false, // biar body mentah dari Telegram bisa dibaca
+  },
+};
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
-    return res.status(405).send("Method not allowed");
+    return res.status(200).send("Bot Active ✅");
   }
 
-  const BOT_TOKEN = process.env.BOT_TOKEN;
-  const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
+  try {
+    // Parse body JSON dari Telegram
+    const buffers = [];
+    for await (const chunk of req) buffers.push(chunk);
+    const data = JSON.parse(Buffer.concat(buffers).toString());
 
-  const body = req.body;
+    const BOT_TOKEN = process.env.BOT_TOKEN;
+    const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
 
-  if (body.message) {
-    const chatId = body.message.chat.id;
-    const text = body.message.text || "";
+    // Tangani pesan masuk
+    if (data.message) {
+      const chatId = data.message.chat.id;
+      const text = data.message.text || "";
 
-    let reply = "Halo! Pilih menu:";
-    if (text.toLowerCase().includes("halo")) reply = "Hai juga 👋";
-    if (text.startsWith("encode:")) {
-      const str = text.replace("encode:", "").trim();
-      reply = Buffer.from(str).toString("base64");
-    } else if (text.startsWith("decode:")) {
-      const str = text.replace("decode:", "").trim();
-      reply = Buffer.from(str, "base64").toString("utf-8");
+      let replyText = "Halo! 👋 Pilih menu:\n\n1️⃣ encode: teks\n2️⃣ decode: teks";
+
+      if (text.toLowerCase().includes("halo")) {
+        replyText = "Hai juga 👋, bot kamu aktif di Vercel 🚀";
+      } else if (text.startsWith("encode:")) {
+        const str = text.replace("encode:", "").trim();
+        replyText = Buffer.from(str).toString("base64");
+      } else if (text.startsWith("decode:")) {
+        const str = text.replace("decode:", "").trim();
+        replyText = Buffer.from(str, "base64").toString("utf-8");
+      }
+
+      await fetch(`${TELEGRAM_API}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: replyText,
+        }),
+      });
     }
 
-    await fetch(`${TELEGRAM_API}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text: reply }),
-    });
+    res.status(200).send("OK");
+  } catch (err) {
+    console.error("Error:", err);
+    res.status(200).send("Error processing update");
   }
-
-  res.status(200).send("OK");
 }
